@@ -1,0 +1,230 @@
+# Lab 0: Triển khai SIEM
+
+Cài đặt và cấu hình hệ thống SIEM bằng Splunk
+
+## 1. Kiến thức nền tảng
+
+- Splunk Universal Forwarder (UF) là gì?
+  Splunk Universal Forwarder là một agent cài trên máy cần giám sát để:
+  - Thu thập log trên các máy
+  - Gửi log về Splunk Server qua mạng
+- Splunk Enterprise là nền tảng trung tâm để:
+  - Nhận log
+  - Lưu trữ / index
+  - Tìm kiếm & phân tích
+  - Dashboard, Alert, Report
+- Sysmon (System Monitor) là công cụ của Microsoft Sysinternals giúp ghi log chi tiết hành vi trên Windows vào Event Log.
+
+## 2. Cài đặt 4 máy ảo
+
+- Ubuntu Server 24.04.3
+- Kali linux 2025.4
+- Windows 10
+- Ubuntu desktop
+
+## 3. Cài đặt và cấu hình Splunk Enterprise trên Ubuntu Server
+
+- Thiết lập ip tĩnh trên Ubuntu Server
+  1. Xem file netplan:
+     - `ls /etc/netplan`
+       ![image.png](images/image.png)
+  2. Mở file đó ra và chỉnh sửa
+  - `nano /etc/netplan/50-cloud-init.yaml`
+  - sửa file đó thành
+    ```powershell
+    network:
+      version: 2
+      ethernets:
+        ens33:
+          dhcp4: no
+          addresses:
+            - 192.168.60.20/24
+          routes:
+            - to: default
+              via: 192.168.60.2
+          nameservers:
+            addresses:
+              - 8.8.8.8
+              - 1.1.1.1
+    ```
+  3. Áp dụng
+  - `netplan apply`
+
+### Bước 1:
+
+- tải file `.deb` Splunk Enterprise
+
+  wget -O /tmp/splunk-10.0.2-e2d18b4767e9-linux-amd64.deb "[https://download.splunk.com/products/splunk/releases/10.0.2/linux/splunk-10.0.2-e2d18b4767e9-linux-amd64.deb](https://download.splunk.com/products/splunk/releases/10.0.2/linux/splunk-10.0.2-e2d18b4767e9-linux-amd64.deb)"
+
+### Bước 2: Cài Splunk
+
+```bash
+cd /tmp
+sudo dpkg -i splunk-*.deb
+sudo apt -f install -y
+```
+
+### Bước 3: Start lần đầu (accept license + tạo admin)
+
+```bash
+sudo /opt/splunk/bin/splunk start --accept-license
+```
+
+- Tạo username/password admin
+
+### Bước 4: Enable
+
+```bash
+sudo /opt/splunk/bin/splunk enable boot-start
+```
+
+### Bước 5: Mở port cần thiết
+
+```bash
+sudo ufw allow 8000/tcp #Splunk Web
+sudo ufw allow 9997/tcp #Receiving from Forwarder
+sudo ufw enable
+sudo ufw status
+```
+
+### Bước 6: Vào Splunk Web
+
+Trên máy host mở:
+
+- `http://192.168.60.20:8000`
+
+### Bước 7: Bật “Receiving” (port 9997)
+
+Splunk Web → **Settings → Forwarding and receiving → Configure receiving → New Receiving Port** → nhập **9997**.
+
+### Bước 8: Tạo Index
+
+Splunk Web → **Settings → Indexes → New Index**
+
+## 4. Cài đặt Sysmon trên máy windows 10
+
+- Bước 1: [https://learn.microsoft.com/en-us/sysinternals/downloads/sysmon](https://learn.microsoft.com/en-us/sysinternals/downloads/sysmon)
+- Bước 2: Tải file cấu hình Sysmon **SwiftOnSecurity sysmon-config**.
+  [https://github.com/SwiftOnSecurity/sysmon-config](https://github.com/SwiftOnSecurity/sysmon-config)
+- Bước 3: Cài đặt Sysmon
+  - Mở cmd bằng quyền admin rồi vào thư mục chứa sysmon rồi chạy lệnh sau
+    ```powershell
+    sysmon64.exe -i sysmonconfig-export.xml
+    ```
+- Nếu thành công, Sysmon sẽ bắt đầu ghi lại các sự kiện vào Windows Event Log, mục **"Microsoft-Windows-Sysmon/Operational"**.
+- **Kiểm tra:** Mở Event Viewer > Applications and Services Logs > Microsoft > Windows > Sysmon > Operational.
+
+![image.png](images/image%201.png)
+
+## 5. Cài & cấu hình Splunk Universal Forwarder trên Windows 10
+
+### Bước 1: Cài UF
+
+Tải **Splunk Universal Forwarder for Windows**
+
+### Bước 2: Cấu hình gửi về Splunk Server
+
+Mở CMD/PowerShell **Run as Administrator**:
+
+```bash
+cd "C:\Program Files\SplunkUniversalForwarder\bin"
+splunk enable boot-start
+splunk start
+splunk add forward-server 192.168.60.20:9997 -auth <admin_user>:<admin_pass>
+```
+
+> Lưu ý: <admin_user>:<admin_pass> ở đây là user của UF local.
+
+### Bước 3: Cấu hình thu thập Windows Event Logs
+
+- Tạo các index trên Splunk web: win_sec, win_sys, win_app, sysmon.
+
+- Tạo/sửa file:
+
+`C:\Program Files\SplunkUniversalForwarder\etc\system\local\inputs.conf`
+
+  ```
+  [WinEventLog://Security]
+  disabled =0
+  index = win_sec
+  sourcetype = WinEventLog:Security
+
+  [WinEventLog://System]
+  disabled =0
+  index = win_sys
+  sourcetype = WinEventLog:System
+
+  [WinEventLog://Application]
+  disabled =0
+  index = win_app
+  sourcetype = WinEventLog:Application
+
+  [WinEventLog://Microsoft-Windows-Sysmon/Operational]
+  disabled =0
+  index = sysmon
+  sourcetype = WinEventLog:Microsoft-Windows-Sysmon/Operational
+  ```
+
+- Restart UF
+  ```bash
+  cd "C:\Program Files\SplunkUniversalForwarder\bin"
+  splunk restart
+  ```
+- Lưu ý khi tải UF: để chế độ **Local System Account** thì mới đủ quyền đọc log Event Viewer ở `Microsoft-Windows-Sysmon/Operational`
+- Nếu lỡ để chế độ khác thì
+  - Kiểm tra lại account đang chạy Splunk Forwarder:
+
+  ```powershell
+  Get-WmiObject win32_service | Where-Object { $_.Name -eq "SplunkForwarder" } | Select-Object StartName
+
+  ```
+
+  - Nếu không thấy `LocalSystem`:
+    - Nhấn `Win + R`, nhập: `services.msc`
+    - Tìm dịch vụ **"SplunkForwarder"**
+    - Chuột phải → `Properties`
+    - Chuyển sang tab **Log On**
+    - Chọn: Local System account
+    - Khởi động lại Splunk Forwarder
+  - `$SPLUNK_HOME` của UF và các file quan trọng
+    - Trên Windows, $SPLUNK_HOME của UF thường là:
+      `C:\Program Files\SplunkUniversalForwarder`
+    - `%SPLUNK_HOME%\etc\system\local\outputs.conf` , Dùng để:
+      - cấu hình forward tới Splunk Indexer/Server
+      - SSL, load balance, multiple indexers…
+    - `%SPLUNK_HOME%\etc\system\local\inputs.conf` , Dùng để:
+      - monitor file/folder
+      - thu Windows Event Logs
+      - đặt `index`, `sourcetype`, `host`, whitelist…
+
+## 6. Cài đặt và cấu hình Splunk Universal Forwarder trên Ubuntu
+
+- Tải file `.deb` từ trang Splunk
+- Cài gói `.deb`
+  ```powershell
+  sudo dpkg -i splunkforwarder*.deb
+  ```
+- Khởi động Splunk Forwarder lần đầu (accept license)
+  ```powershell
+  sudo /opt/splunkforwarder/bin/splunk start --accept-license
+  ```
+- Kiểm tra Forwarder đang chạy
+  ```bash
+  sudo /opt/splunkforwarder/bin/splunk status
+  ```
+- Cấu hình gửi về Splunk Server
+  ```bash
+  sudo /opt/splunkforwarder/bin/splunk add forward-server 192.168.60.20:9997
+  ```
+- Add các log cần theo dõi
+  ```powershell
+  sudo /opt/splunkforwarder/bin/splunk add monitor /var/log/auth.log -sourcetype syslog -index nix_auth
+  sudo /opt/splunkforwarder/bin/splunk restart
+  ```
+- `$SPLUNK_HOME` của UF và các file quan trọng
+  - **`$SPLUNK_HOME = /opt/splunkforwarder`**
+  - file config nằm ở: `/opt/splunkforwarder/etc/system/local`
+    - `outputs.conf` : dùng để khai báo gửi đi đâu (Forwarding), Splunk Server nhận log
+    - `inputs.conf` : để đọc cái gì, monitor file/thư mục log, đặt sourcetype, index, host,…
+  - log của forwarder nằm ở: `/opt/splunkforwarder/var/log/splunk/...`
+  - lệnh splunk nằm ở: `/opt/splunkforwarder/bin/splunk`

@@ -1,0 +1,86 @@
+services:
+  splunk-master:
+    image: splunk/splunk:latest
+    container_name: splunk-master
+    environment:
+      - SPLUNK_START_ARGS=--accept-license
+      - SPLUNK_GENERAL_TERMS=--accept-sgt-current-at-splunk-com
+      - SPLUNK_PASSWORD=Admin@123
+      - SPLUNK_ROLE=splunk_cluster_master
+      - SPLUNK_IDXC_PASS4SYMMKEY=Admin@123
+    ports:
+      - "8089:8089"
+      - "8001:8000"
+    networks:
+      - splunk-net
+    volumes:
+      - master-etc:/opt/splunk/etc
+      - master-var:/opt/splunk/var
+
+  idx-01:
+    image: splunk/splunk:latest
+    container_name: splunk-idx-01
+    environment:
+      - SPLUNK_START_ARGS=--accept-license
+      - SPLUNK_GENERAL_TERMS=--accept-sgt-current-at-splunk-com
+      - SPLUNK_PASSWORD=Admin@123
+      - SPLUNK_ROLE=splunk_indexer
+      - SPLUNK_CLUSTER_MASTER_URL=splunk-master
+      - SPLUNK_IDXC_PASS4SYMMKEY=Admin@123
+    ports:
+      - "9997:9997"
+    networks:
+      - splunk-net
+    volumes:
+      - idx1-etc:/opt/splunk/etc
+      - idx1-var:/opt/splunk/var
+
+  idx-02:
+    image: splunk/splunk:latest
+    container_name: splunk-idx-02
+    environment:
+      - SPLUNK_START_ARGS=--accept-license
+      - SPLUNK_GENERAL_TERMS=--accept-sgt-current-at-splunk-com
+      - SPLUNK_PASSWORD=Admin@123
+      - SPLUNK_ROLE=splunk_indexer
+      - SPLUNK_CLUSTER_MASTER_URL=splunk-master
+      - SPLUNK_IDXC_PASS4SYMMKEY=Admin@123
+    ports:
+      - "9998:9997"
+    networks:
+      - splunk-net
+    volumes:
+      - idx2-etc:/opt/splunk/etc
+      - idx2-var:/opt/splunk/var
+
+  splunk-sh:
+    image: splunk/splunk:latest
+    container_name: splunk-sh
+    environment:
+      - SPLUNK_START_ARGS=--accept-license
+      - SPLUNK_GENERAL_TERMS=--accept-sgt-current-at-splunk-com
+      - SPLUNK_PASSWORD=Admin@123
+      - SPLUNK_ROLE=splunk_search_head
+      - SPLUNK_CLUSTER_MASTER_URL=splunk-master
+      - SPLUNK_IDXC_PASS4SYMMKEY=Admin@123
+    ports:
+      - "8000:8000"
+    networks:
+      - splunk-net
+    volumes:
+      - sh-etc:/opt/splunk/etc
+      - sh-var:/opt/splunk/var
+
+networks:
+  splunk-net:
+    driver: bridge
+
+volumes:
+  master-etc:
+  master-var:
+  idx1-etc:
+  idx1-var:
+  idx2-etc:
+  idx2-var:
+  sh-etc:
+  sh-var:
