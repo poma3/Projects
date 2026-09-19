@@ -6,7 +6,7 @@ Kiểm tra tính năng Active Respone của Wazuh bằng cách tấn công brute
 
 #### 2. Cấu hình Active Respone tự động chặn ip kẻ tấn công bằng Firewall
 
-- Mở file `/var/ossec/etc/ossec.conf` trên Wazuh server, đảm bảo đã có phần này (thường là mặc định)
+- Mở file `/var/ossec/etc/ossec.conf` trên Wazuh server
     
     ```powershell
     <command>
@@ -28,7 +28,7 @@ Kiểm tra tính năng Active Respone của Wazuh bằng cách tấn công brute
     ```
     
     - `location="local"`: Tức là con Agent nào đang bị tấn công thì ra lệnh cho tường lửa của chính con Agent đó chặn IP.
-    - `rules_id`: Thay vì khóa mù quáng, hệ thống chỉ kích hoạt chặn nếu log vi phạm đúng bộ luật số `5712` hoặc `5720` (Bạn hoàn toàn có thể thay bằng các mức độ như `<level>10</level>` để hễ cảnh báo nào từ level 10 trở lên là tự động chặn).
+    - `rules_id`: Thay vì khóa mù quáng, hệ thống chỉ kích hoạt chặn nếu log vi phạm đúng bộ luật số `5712` hoặc `5720`.
 - Lưu và khởi động lại Wazuh manager
     
     ```powershell
